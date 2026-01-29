@@ -87,6 +87,29 @@ class StorageService:
         """파일의 실제 경로 반환"""
         return self.files_path / file_path
 
+    async def get_file_content(self, file_path: str) -> bytes:
+        """파일 내용 읽기"""
+        full_path = self.files_path / file_path
+        async with aiofiles.open(full_path, "rb") as f:
+            return await f.read()
+
+    async def get_file_content_by_recording_id(self, recording_id: str) -> tuple[bytes, str]:
+        """
+        녹음 ID로 파일 내용 읽기
+        Returns: (file_content, file_name)
+        """
+        db = await self._load_db()
+        data = db["recordings"].get(recording_id)
+        if not data:
+            raise FileNotFoundError(f"Recording not found: {recording_id}")
+
+        file_path = data.get("file_path")
+        if not file_path:
+            raise FileNotFoundError(f"File path not found for recording: {recording_id}")
+
+        content = await self.get_file_content(file_path)
+        return content, data.get("file_name", "audio.wav")
+
     async def delete_file(self, file_path: str) -> bool:
         """
         로컬 스토리지에서 파일 삭제

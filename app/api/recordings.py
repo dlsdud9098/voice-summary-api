@@ -125,10 +125,13 @@ async def transcribe_recording(recording_id: str):
             status=RecordingStatus.TRANSCRIBING
         )
 
+        # 로컬 파일에서 오디오 데이터 읽기
+        audio_content, file_name = await storage.get_file_content_by_recording_id(recording_id)
+
         # STT 실행
-        transcript = await stt.transcribe_from_url(
-            audio_url=recording.file_url,
-            file_name=recording.file_name
+        transcript = await stt.transcribe(
+            audio_content=audio_content,
+            file_name=file_name
         )
 
         # 결과 저장
