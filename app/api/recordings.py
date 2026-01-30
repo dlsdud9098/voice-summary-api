@@ -3,8 +3,8 @@
 음성 녹음 업로드, 변환, 요약 관련 엔드포인트
 """
 
-from typing import Optional
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from typing import Optional, List
+from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile, status
 
 from app.models.recording import (
     Recording,
@@ -163,7 +163,12 @@ async def transcribe_recording(recording_id: str):
 @router.post("/{recording_id}/summarize", response_model=SummaryResponse)
 async def summarize_recording(
     recording_id: str,
-    summary_type: SummaryType = SummaryType.GENERAL
+    summary_type: SummaryType = SummaryType.GENERAL,
+    extra_fields: Optional[str] = Query(
+        default=None,
+        description="커스텀 추가 필드 (쉼표로 구분, 최대 5개, 각 20자)",
+        examples=["등장인물,명대사,배경"]
+    )
 ):
     """
     녹음 텍스트를 요약 (Cerebras API + LangChain 템플릿)
@@ -171,6 +176,7 @@ async def summarize_recording(
     - 먼저 transcribe 엔드포인트로 텍스트 변환 필요
     - 요약 유형에 따라 다른 템플릿 사용
     - 유형: general(일반), meeting(회의), lecture(강의), interview(인터뷰), memo(메모)
+    - extra_fields: 커스텀 추가 필드 (쉼표로 구분)
     """
     storage = get_storage_service()
     llm = get_llm_service()
@@ -201,6 +207,11 @@ async def summarize_recording(
             status=recording.status
         )
 
+    # extra_fields 파싱
+    extra_fields_list: Optional[List[str]] = None
+    if extra_fields:
+        extra_fields_list = [f.strip() for f in extra_fields.split(",") if f.strip()]
+
     try:
         # 상태 업데이트: 요약 중
         await storage.update_recording(
@@ -212,7 +223,8 @@ async def summarize_recording(
         llm_summary_type = LLMSummaryType(summary_type.value)
         summary, key_points, extra_data = await llm.summarize(
             recording.transcript,
-            llm_summary_type
+            llm_summary_type,
+            extra_fields_list
         )
 
         # 결과 저장
@@ -234,6 +246,12 @@ async def summarize_recording(
             status=RecordingStatus.COMPLETED
         )
 
+    except ValueError as e:
+        # 검증 오류 (커스텀 필드 검증 실패)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
         # 오류 발생 시 상태 업데이트
         await storage.update_recording(
