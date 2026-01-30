@@ -5,7 +5,7 @@ Pydantic 스키마 정의
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Any
 from pydantic import BaseModel, Field
 
 
@@ -17,6 +17,15 @@ class RecordingStatus(str, Enum):
     SUMMARIZING = "summarizing"   # 요약 중
     COMPLETED = "completed"       # 처리 완료
     ERROR = "error"               # 오류 발생
+
+
+class SummaryType(str, Enum):
+    """요약 유형"""
+    GENERAL = "general"      # 일반
+    MEETING = "meeting"      # 회의
+    LECTURE = "lecture"      # 강의
+    INTERVIEW = "interview"  # 인터뷰
+    MEMO = "memo"            # 메모/아이디어
 
 
 class RecordingBase(BaseModel):
@@ -52,7 +61,9 @@ class Recording(RecordingBase):
     )
     transcript: Optional[str] = Field(None, description="텍스트 변환 결과")
     summary: Optional[str] = Field(None, description="요약 결과")
+    summary_type: Optional[SummaryType] = Field(None, description="요약 유형")
     key_points: Optional[list[str]] = Field(None, description="핵심 포인트")
+    extra_data: Optional[dict[str, Any]] = Field(None, description="요약 유형별 추가 데이터")
     created_at: datetime = Field(..., description="생성 시간")
     updated_at: datetime = Field(..., description="수정 시간")
 
@@ -79,5 +90,7 @@ class SummaryResponse(BaseModel):
     """요약 응답 스키마"""
     recording_id: str
     summary: str
+    summary_type: SummaryType
     key_points: list[str]
+    extra_data: Optional[dict[str, Any]] = None
     status: RecordingStatus

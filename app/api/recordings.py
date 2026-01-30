@@ -11,11 +11,12 @@ from app.models.recording import (
     RecordingList,
     RecordingStatus,
     SummaryResponse,
+    SummaryType,
     TranscriptionResponse,
 )
 from app.services.storage import get_storage_service
 from app.services.stt import get_stt_service
-from app.services.llm import get_llm_service
+from app.services.llm import get_llm_service, SummaryType as LLMSummaryType
 
 
 router = APIRouter(prefix="/recordings", tags=["recordings"])
@@ -160,12 +161,16 @@ async def transcribe_recording(recording_id: str):
 
 
 @router.post("/{recording_id}/summarize", response_model=SummaryResponse)
-async def summarize_recording(recording_id: str):
+async def summarize_recording(
+    recording_id: str,
+    summary_type: SummaryType = SummaryType.GENERAL
+):
     """
-    녹음 텍스트를 요약 (Cerebras API)
+    녹음 텍스트를 요약 (Cerebras API + LangChain 템플릿)
 
     - 먼저 transcribe 엔드포인트로 텍스트 변환 필요
-    - 한국어로 요약 및 핵심 포인트 추출
+    - 요약 유형에 따라 다른 템플릿 사용
+    - 유형: general(일반), meeting(회의), lecture(강의), interview(인터뷰), memo(메모)
     """
     storage = get_storage_service()
     llm = get_llm_service()
@@ -185,12 +190,14 @@ async def summarize_recording(recording_id: str):
             detail="먼저 텍스트 변환(transcribe)을 수행해주세요."
         )
 
-    # 이미 요약된 경우
-    if recording.summary:
+    # 이미 요약된 경우 (같은 유형인 경우에만)
+    if recording.summary and recording.summary_type == summary_type:
         return SummaryResponse(
             recording_id=recording_id,
             summary=recording.summary,
+            summary_type=summary_type,
             key_points=recording.key_points or [],
+            extra_data=recording.extra_data,
             status=recording.status
         )
 
@@ -201,21 +208,29 @@ async def summarize_recording(recording_id: str):
             status=RecordingStatus.SUMMARIZING
         )
 
-        # LLM 요약 실행
-        summary, key_points = await llm.summarize(recording.transcript)
+        # LLM 요약 실행 (LangChain 템플릿 사용)
+        llm_summary_type = LLMSummaryType(summary_type.value)
+        summary, key_points, extra_data = await llm.summarize(
+            recording.transcript,
+            llm_summary_type
+        )
 
         # 결과 저장
         await storage.update_recording(
             recording_id,
             summary=summary,
+            summary_type=summary_type.value,
             key_points=key_points,
+            extra_data=extra_data,
             status=RecordingStatus.COMPLETED
         )
 
         return SummaryResponse(
             recording_id=recording_id,
             summary=summary,
+            summary_type=summary_type,
             key_points=key_points,
+            extra_data=extra_data,
             status=RecordingStatus.COMPLETED
         )
 

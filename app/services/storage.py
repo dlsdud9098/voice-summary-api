@@ -168,7 +168,9 @@ class StorageService:
             "status": RecordingStatus.UPLOADED.value,
             "transcript": None,
             "summary": None,
+            "summary_type": None,
             "key_points": None,
+            "extra_data": None,
             "created_at": now,
             "updated_at": now
         }
@@ -306,6 +308,12 @@ class StorageService:
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
 
+        # summary_type 처리
+        from app.models.recording import SummaryType
+        summary_type = data.get("summary_type")
+        if summary_type and isinstance(summary_type, str):
+            summary_type = SummaryType(summary_type)
+
         return Recording(
             id=data["id"],
             file_url=data["file_url"],
@@ -317,7 +325,9 @@ class StorageService:
             status=RecordingStatus(data["status"]),
             transcript=data.get("transcript"),
             summary=data.get("summary"),
+            summary_type=summary_type,
             key_points=data.get("key_points"),
+            extra_data=data.get("extra_data"),
             created_at=created_at,
             updated_at=updated_at
         )
